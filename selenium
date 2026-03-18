@@ -1,0 +1,9 @@
+#!/bin/sh
+# ───────────────────────────────────────────────────
+#  selenium — alias to run selenium-cli fat JAR
+#  (for Git Bash / WSL / macOS / Linux)
+#  Add this file's directory to your PATH
+# ───────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+java -jar "$SCRIPT_DIR/target/selenium-cli-1.0.0.jar" "$@"
+
