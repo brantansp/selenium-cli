@@ -1,11 +1,13 @@
 package cli;
 
 import cli.commands.*;
-import cli.completions.ChromeArgCandidates;
-import cli.completions.CommaSplitCompleter;
+import cli.completions.*;
 import cli.model.CommandResult;
 import cli.session.SessionManager;
 import org.jline.reader.impl.completer.AggregateCompleter;
+import org.jline.reader.impl.completer.ArgumentCompleter;
+import org.jline.reader.impl.completer.NullCompleter;
+import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.reader.impl.completer.SystemCompleter;
 import org.jline.reader.*;
 import org.jline.reader.impl.DefaultParser;
@@ -43,41 +45,75 @@ import java.util.logging.Logger;
  * <!-- TODO: migrate to ServiceLoader for plugin support -->
  */
 @Command(
-    name = "selenium",
-    version = "selenium-cli 1.0.0",
-    description = "Interactive Selenium WebDriver CLI",
-    mixinStandardHelpOptions = true,
-    subcommands = {
-        OpenCommand.class,
-        ClickCommand.class,
-        TypeCommand.class,
-        GetTextCommand.class,
-        GetAttrCommand.class,
-        ScreenshotCommand.class,
-        NavigateCommand.class,
-        WaitCommand.class,
-        ExecuteJsCommand.class,
-        ConfigCommand.class,
-        RunCommand.class,
-        SessionCommand.class,
-        QuitCommand.class
-    }
+        name = "selenium",
+        version = "selenium-cli 1.0.0",
+        description = "Interactive Selenium WebDriver CLI",
+        mixinStandardHelpOptions = true,
+        subcommands = {
+                OpenCommand.class,
+                ClickCommand.class,
+                TypeCommand.class,
+                GetTextCommand.class,
+                GetAttrCommand.class,
+                ScreenshotCommand.class,
+                NavigateCommand.class,
+                WaitCommand.class,
+                ExecuteJsCommand.class,
+                ConfigCommand.class,
+                RunCommand.class,
+                SessionCommand.class,
+                QuitCommand.class
+        }
 )
 public class SeleniumCli implements Runnable {
 
     // ── ANSI color constants ────────────────────────────────────
-    private static final String CYAN    = "\u001B[36m";
-    private static final String GREEN   = "\u001B[32m";
-    private static final String YELLOW  = "\u001B[33m";
-    private static final String BOLD    = "\u001B[1m";
-    private static final String RESET   = "\u001B[0m";
+    private static final String CYAN = "\u001B[36m";
+    private static final String GREEN = "\u001B[32m";
+    private static final String YELLOW = "\u001B[33m";
+    private static final String BOLD = "\u001B[1m";
+    private static final String RESET = "\u001B[0m";
 
-    private static final String BANNER =
-            CYAN + "┌─────────────────────────────────────┐\n" +
-            "│" + BOLD + GREEN + "   Selenium CLI  v1.0.0              " + RESET + CYAN + "│\n" +
-            "│" + YELLOW + "   Type 'help' or '--help' for usage " + CYAN + "│\n" +
-            "│" + YELLOW + "   Type 'exit' to leave              " + CYAN + "│\n" +
-            "└─────────────────────────────────────┘" + RESET + "\n";
+    // CLI prompt icon (> ✓ ━) rendered as text art
+    private static final String L = CYAN;   // border
+    private static final String C = BOLD;   // chevron + bar (charcoal)
+    private static final String G = GREEN;  // checkmark (green)
+    private static final String R = RESET;
+    private static final String BANNER = String.join(System.lineSeparator(),
+            "",
+            L + "         #################################################################        " + R,
+            L + "       ####" + R + "                                                             " + L + "####      " + R,
+            L + "     ###" + R + "                                                                  " + L + "###     " + R,
+            L + "     ###" + R + "                                                        " + G + "+++++" + R + "     " + L + "###     " + R,
+            L + "     ###" + R + "                                                      " + G + "++++++" + R + "      " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "####" + R + "                                         " + G + "++++++" + R + "        " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "#######" + R + "                             " + G + "+++" + R + "     " + G + "++++++" + R + "         " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "##########" + R + "                         " + G + "++++++" + R + " " + G + "++++++" + R + "           " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "#############" + R + "                       " + G + "+++++++++++" + R + "            " + L + "###     " + R,
+            L + "     ###" + R + "        " + C + "###############" + R + "                      " + G + "+++++++" + R + "              " + L + "###     " + R,
+            L + "     ###" + R + "            " + C + "##############" + R + "                    " + G + "+++++" + R + "               " + L + "###     " + R,
+            L + "     ###" + R + "              " + C + "###############" + R + "                                     " + L + "###     " + R,
+            L + "     ###" + R + "                 " + C + "###############" + R + "                                  " + L + "###     " + R,
+            L + "     ###" + R + "                    " + C + "##############" + R + "                                " + L + "###     " + R,
+            L + "     ###" + R + "                       " + C + "##############" + R + "                             " + L + "###     " + R,
+            L + "     ###" + R + "                    " + C + "################" + R + "                              " + L + "###     " + R,
+            L + "     ###" + R + "                  " + C + "###############" + R + "                                 " + L + "###     " + R,
+            L + "     ###" + R + "               " + C + "##############" + R + "                                     " + L + "###     " + R,
+            L + "     ###" + R + "            " + C + "##############" + R + "                                        " + L + "###     " + R,
+            L + "     ###" + R + "        " + C + "################" + R + "                 " + C + "###################" + R + "      " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "#############" + R + "                     " + C + "###################" + R + "      " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "###########" + R + "                                                " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "########" + R + "                                                   " + L + "###     " + R,
+            L + "     ###" + R + "       " + C + "#####" + R + "                                                      " + L + "###     " + R,
+            L + "     ###" + R + "                                                                  " + L + "###     " + R,
+            L + "       ###" + R + "                                                               " + L + "###      " + R,
+            L + "        ###################################################################       " + R,
+            L + "           #############################################################          " + R,
+            "",
+            BOLD + GREEN + "     Selenium CLI  " + R + YELLOW + "v1.0.0" + R,
+            YELLOW + "     Type 'help' or '--help' for usage" + R,
+            YELLOW + "     Type 'exit' to leave" + R,
+            "");
 
     public static void main(String[] args) {
         // Suppress Selenium's internal JUL warnings so only clean JSON hits stdout/stderr
@@ -95,7 +131,9 @@ public class SeleniumCli implements Runnable {
         }
     }
 
-    /** Called by Picocli when 'selenium' is invoked with no subcommand in one-shot mode. */
+    /**
+     * Called by Picocli when 'selenium' is invoked with no subcommand in one-shot mode.
+     */
     @Override
     public void run() {
         // If invoked via Picocli with no subcommand, start the REPL
@@ -118,19 +156,32 @@ public class SeleniumCli implements Runnable {
         cli.setColorScheme(CommandLine.Help.defaultColorScheme(CommandLine.Help.Ansi.ON));
 
         try {
+            // Print banner via System.out BEFORE JLine takes over the terminal.
+            // Writing through terminal.writer() is tracked by JLine's Display
+            // engine, and readLine() overwrites it when it draws the prompt.
+            System.out.println(BANNER);
+            System.out.println();
+            System.out.flush();
+
             // ── JLine3 terminal ──────────────────────────────────
             Terminal terminal = TerminalBuilder.builder()
                     .system(true)
                     .color(true)       // force color support on the terminal
                     .build();
 
-            terminal.writer().println(BANNER);
-            terminal.writer().flush();
 
             // ── Picocli → JLine completers ───────────────────────
             PicocliCommands picocliCommands = new PicocliCommands(cli);
             SystemCompleter systemCompleter = picocliCommands.compileCompleters();
             systemCompleter.compile();
+
+            // ── Positional-parameter completers ──────────────────
+            // PicocliCommands.compileCompleters() handles command names
+            // and --option completions, but does NOT propagate
+            // completionCandidates from @Parameters into JLine.
+            // We fix this by adding explicit ArgumentCompleters for
+            // each command that has positional parameters.
+            List<Completer> paramCompleters = buildParameterCompleters();
 
             // ── Comma-split completer for --options=val1,val2,... ─
             List<String> chromeArgs = new ArrayList<>();
@@ -139,10 +190,12 @@ public class SeleniumCli implements Runnable {
                     Map.of("--options", chromeArgs)
             );
 
-            // Combine both completers so standard + comma-split both work
-            AggregateCompleter combinedCompleter = new AggregateCompleter(
-                    systemCompleter, commaSplitCompleter
-            );
+            // Combine all completers: picocli system + positional params + comma-split
+            List<Completer> allCompleters = new ArrayList<>();
+            allCompleters.add(systemCompleter);
+            allCompleters.addAll(paramCompleters);
+            allCompleters.add(commaSplitCompleter);
+            AggregateCompleter combinedCompleter = new AggregateCompleter(allCompleters);
 
             // ── Build the LineReader with autocomplete ───────────
             LineReader reader = LineReaderBuilder.builder()
@@ -242,6 +295,84 @@ public class SeleniumCli implements Runnable {
             CommandResult.error("selenium", Collections.emptyList(), ex.getMessage()).print();
             return 1;
         };
+    }
+
+    /**
+     * Build JLine {@link ArgumentCompleter}s that provide tab-completion for
+     * each command's positional {@code @Parameters} with {@code completionCandidates}.
+     * <p>
+     * {@code PicocliCommands.compileCompleters()} only generates completers for
+     * command names and {@code --option} names/values. Positional parameter
+     * candidates are <b>not</b> propagated, so we register them here explicitly.
+     */
+    private static List<Completer> buildParameterCompleters() {
+        List<Completer> completers = new ArrayList<>();
+
+        // open <url>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("open"),
+                new StringsCompleter(iterableToList(new UrlCandidates())),
+                NullCompleter.INSTANCE));
+
+        // click <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("click"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // type <locator> <text>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("type"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // gettext <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("gettext"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // getattr <locator> <attribute>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("getattr"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                new StringsCompleter(iterableToList(new AttributeCandidates())),
+                NullCompleter.INSTANCE));
+
+        // navigate <direction>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("navigate"),
+                new StringsCompleter(iterableToList(new NavigationCandidates())),
+                NullCompleter.INSTANCE));
+
+        // wait <seconds>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("wait"),
+                new StringsCompleter(iterableToList(new WaitSecondsCandidates())),
+                NullCompleter.INSTANCE));
+
+        // execute <script>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("execute"),
+                new StringsCompleter(iterableToList(new JsSnippetCandidates())),
+                NullCompleter.INSTANCE));
+
+        // screenshot [path]
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("screenshot"),
+                new StringsCompleter(iterableToList(new ScreenshotPathCandidates())),
+                NullCompleter.INSTANCE));
+
+        return completers;
+    }
+
+    /**
+     * Convert any {@code Iterable<String>} to a {@code List<String>}.
+     */
+    private static List<String> iterableToList(Iterable<String> iterable) {
+        List<String> list = new ArrayList<>();
+        iterable.forEach(list::add);
+        return list;
     }
 
     /**
