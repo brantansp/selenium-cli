@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="selenium-cli-removebg-preview.svg" alt="Selenium CLI Logo" width="200"/>
+</p>
+
 # Selenium CLI
 
 An interactive REPL and one-shot command-line interface that exposes **Selenium WebDriver** as simple shell commands. Every response is structured **JSON**, making it easy to pipe into `jq`, log to files, or integrate with other tooling.
