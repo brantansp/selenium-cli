@@ -2,8 +2,10 @@ package cli;
 
 import cli.commands.*;
 import cli.completions.*;
+import cli.config.BrowserConfig;
 import cli.model.CommandResult;
 import cli.session.SessionManager;
+import cli.util.SessionRecorder;
 import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.reader.impl.completer.ArgumentCompleter;
 import org.jline.reader.impl.completer.NullCompleter;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -67,6 +70,10 @@ import java.util.logging.Logger;
 )
 public class SeleniumCli implements Runnable {
 
+    @CommandLine.Option(names = "--no-record",
+            description = "Disable automatic session recording (recording is ON by default)")
+    private boolean noRecord;
+
     // ── ANSI color constants ────────────────────────────────────
     private static final String CYAN = "\u001B[36m";
     private static final String GREEN = "\u001B[32m";
@@ -108,7 +115,6 @@ public class SeleniumCli implements Runnable {
             L + "     ###" + R + "                                                                  " + L + "###     " + R,
             L + "       ###" + R + "                                                               " + L + "###      " + R,
             L + "        ###################################################################       " + R,
-            L + "           #############################################################          " + R,
             "",
             BOLD + GREEN + "     Selenium CLI  " + R + YELLOW + "v1.0.0" + R,
             YELLOW + "     Type 'help' or '--help' for usage" + R,
@@ -119,15 +125,27 @@ public class SeleniumCli implements Runnable {
         // Suppress Selenium's internal JUL warnings so only clean JSON hits stdout/stderr
         Logger.getLogger("org.openqa.selenium").setLevel(Level.SEVERE);
 
-        CommandLine cli = buildCommandLine();
+        // Check for --no-record before Picocli routing
+        boolean noRecordFlag = false;
+        List<String> filteredArgs = new ArrayList<>();
+        for (String arg : args) {
+            if ("--no-record".equals(arg)) {
+                noRecordFlag = true;
+            } else {
+                filteredArgs.add(arg);
+            }
+        }
 
-        if (args.length > 0) {
-            // One-shot mode: execute the command and exit
-            int exitCode = cli.execute(args);
+        if (!filteredArgs.isEmpty()) {
+            // One-shot mode: execute the command and exit (no recording in one-shot)
+            CommandLine cli = buildCommandLine();
+            int exitCode = cli.execute(filteredArgs.toArray(new String[0]));
             System.exit(exitCode);
         } else {
             // REPL mode
-            new SeleniumCli().repl();
+            SeleniumCli app = new SeleniumCli();
+            app.noRecord = noRecordFlag;
+            app.repl();
         }
     }
 
@@ -144,8 +162,13 @@ public class SeleniumCli implements Runnable {
 
     private void repl() {
 
+        // ── Session recorder: singleton, ON by default, togglable via config --record ───
+        SessionRecorder recorder = SessionRecorder.getInstance();
+        if (noRecord) recorder.disable();
+
         // Ensure browser is closed when the JVM shuts down (Ctrl+C, etc.)
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            saveRecording(recorder);
             if (SessionManager.getInstance().isActive()) {
                 SessionManager.getInstance().shutdown();
             }
@@ -160,7 +183,7 @@ public class SeleniumCli implements Runnable {
             // Writing through terminal.writer() is tracked by JLine's Display
             // engine, and readLine() overwrites it when it draws the prompt.
             System.out.println(BANNER);
-            System.out.println();
+            System.out.println(buildStartupOptionsBlock());
             System.out.flush();
 
             // ── JLine3 terminal ──────────────────────────────────
@@ -225,6 +248,7 @@ public class SeleniumCli implements Runnable {
                     continue;
                 } catch (EndOfFileException e) {
                     // Ctrl+D / EOF — exit gracefully
+                    saveRecording(recorder);
                     break;
                 }
 
@@ -236,6 +260,7 @@ public class SeleniumCli implements Runnable {
                     if (SessionManager.getInstance().isActive()) {
                         SessionManager.getInstance().shutdown();
                     }
+                    saveRecording(recorder);
                     CommandResult.success("exit", Collections.emptyList(),
                             "Goodbye.").print();
                     break;
@@ -251,6 +276,9 @@ public class SeleniumCli implements Runnable {
                 String[] tokens = tokenize(line);
                 if (tokens.length == 0) continue;
 
+                // Record the command for session replay (respects enabled/disabled state)
+                recorder.record(tokens);
+
                 cli.execute(tokens);
             }
 
@@ -262,6 +290,87 @@ public class SeleniumCli implements Runnable {
     }
 
     // ── Helpers ─────────────────────────────────────────────────
+
+    /**
+     * Build a coloured block that shows the status of every startup option.
+     * Printed once, right after the banner.
+     */
+    private String buildStartupOptionsBlock() {
+        BrowserConfig cfg = BrowserConfig.getInstance();
+
+        String DIM   = "\u001B[2m";   // dim / faint
+        String ON    = GREEN;          // green for enabled
+        String OFF   = DIM;            // dim for disabled
+        String LBL   = YELLOW;        // label colour
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(BOLD).append(CYAN).append("     ── Startup Options ──────────────────────────").append(RESET).append("\n");
+
+        // CLI-level option
+        appendOption(sb, "Session Recording", SessionRecorder.getInstance().isEnabled(), LBL, ON, OFF);
+
+        // Browser config options
+        appendOption(sb, "Headless",          cfg.isHeadless(),   LBL, ON, OFF);
+        appendOption(sb, "Maximize",          cfg.isMaximize(),   LBL, ON, OFF);
+        appendOption(sb, "Incognito",         cfg.isIncognito(),  LBL, ON, OFF);
+
+        // Value-based options (show value when set, "off" when not)
+        appendValueOption(sb, "Window Size",      cfg.getWindowSize(),     LBL, ON, OFF);
+        appendValueOption(sb, "User Data Dir",    cfg.getUserDataDir(),    LBL, ON, OFF);
+        appendValueOption(sb, "Proxy",            cfg.getProxyUrl(),       LBL, ON, OFF);
+        appendValueOption(sb, "Browser Version",  cfg.getBrowserVersion(), LBL, ON, OFF);
+
+        // List options
+        appendListOption(sb, "Extra Headers",     cfg.getExtraHeaders().isEmpty() ? null : cfg.getExtraHeaders().keySet().toString(), LBL, ON, OFF);
+        appendListOption(sb, "Chrome Arguments",  cfg.getRawArguments().isEmpty()  ? null : String.join(", ", cfg.getRawArguments()), LBL, ON, OFF);
+
+        sb.append(BOLD).append(CYAN).append("     ─────────────────────────────────────────────").append(RESET).append("\n");
+        sb.append(DIM).append("     Use 'config --<option> true/false' to change at runtime").append(RESET).append("\n");
+        sb.append(DIM).append("     Use 'config --show' to view current settings").append(RESET).append("\n");
+        return sb.toString();
+    }
+
+    private static void appendOption(StringBuilder sb, String label, boolean enabled,
+                                     String lblColor, String onColor, String offColor) {
+        String status = enabled
+                ? onColor  + "ENABLED"  + RESET
+                : offColor + "disabled" + RESET;
+        sb.append("     ").append(lblColor).append(String.format("%-20s", label)).append(RESET)
+          .append(" : ").append(status).append("\n");
+    }
+
+    private static void appendValueOption(StringBuilder sb, String label, String value,
+                                          String lblColor, String onColor, String offColor) {
+        String status = (value != null && !value.isBlank())
+                ? onColor  + value     + RESET
+                : offColor + "off"     + RESET;
+        sb.append("     ").append(lblColor).append(String.format("%-20s", label)).append(RESET)
+          .append(" : ").append(status).append("\n");
+    }
+
+    private static void appendListOption(StringBuilder sb, String label, String value,
+                                         String lblColor, String onColor, String offColor) {
+        String status = (value != null)
+                ? onColor  + value + RESET
+                : offColor + "off" + RESET;
+        sb.append("     ").append(lblColor).append(String.format("%-20s", label)).append(RESET)
+          .append(" : ").append(status).append("\n");
+    }
+
+    /**
+     * Write the session recording to a JSON file (if any commands were recorded).
+     * The file uses the same format as {@code run --json} input, so it can be
+     * replayed directly.
+     */
+    private static void saveRecording(SessionRecorder recorder) {
+        if (!recorder.hasRecords()) return;
+        try {
+            Path saved = recorder.save();
+            System.out.println("{\"session_recorded\": \"" + saved.toString().replace("\\", "\\\\") + "\"}");
+        } catch (Exception e) {
+            System.err.println("Warning: failed to save session recording — " + e.getMessage());
+        }
+    }
 
     /**
      * Build a configured {@link CommandLine} with JSON error handling.
@@ -376,20 +485,48 @@ public class SeleniumCli implements Runnable {
     }
 
     /**
-     * Simple tokenizer that respects double-quoted strings.
+     * Tokenizer that respects both single- and double-quoted strings.
      * <p>
-     * {@code type #email "hello world"} → ["type", "#email", "hello world"]
+     * Quotes that begin a new token are treated as <b>grouping</b> quotes and
+     * are stripped from the result (shell-style):
+     * <pre>  type #email "hello world" → ["type", "#email", "hello world"]</pre>
+     * <p>
+     * Quotes that appear <b>inside</b> an existing token (e.g. embedded in an
+     * XPath expression) are preserved literally while still preventing the
+     * enclosed spaces from splitting the token:
+     * <pre>  click xpath=(//*[@value='Google Search'])[2]
+     *       → ["click", "xpath=(//*[@value='Google Search'])[2]"]</pre>
      */
     static String[] tokenize(String input) {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
+        char quoteChar = 0;
+        boolean stripQuotes = false; // true when quoting started at a token boundary
 
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
 
-            if (c == '"') {
-                inQuotes = !inQuotes;
+            if (!inQuotes && (c == '"' || c == '\'')) {
+                // Opening quote
+                inQuotes = true;
+                quoteChar = c;
+                if (current.isEmpty()) {
+                    // Quote starts a new token → grouping quote, strip it
+                    stripQuotes = true;
+                } else {
+                    // Quote is mid-token (e.g. inside XPath) → keep it literal
+                    stripQuotes = false;
+                    current.append(c);
+                }
+            } else if (inQuotes && c == quoteChar) {
+                // Closing quote
+                inQuotes = false;
+                if (!stripQuotes) {
+                    current.append(c); // preserve embedded closing quote
+                }
+                quoteChar = 0;
+                stripQuotes = false;
             } else if (c == ' ' && !inQuotes) {
                 if (!current.isEmpty()) {
                     tokens.add(current.toString());

@@ -7,6 +7,7 @@ import cli.completions.WindowSizeCandidates;
 import cli.config.BrowserConfig;
 import cli.model.CommandResult;
 import cli.session.SessionManager;
+import cli.util.SessionRecorder;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -16,26 +17,35 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Configures browser options before or during a session.
+ * Configures browser options and CLI behaviour before or during a session.
  *
  * <pre>
  *   selenium&gt; config --maximize
  *   selenium&gt; config --headless --window-size 1920x1080
  *   selenium&gt; config --header X-Custom:value
  *   selenium&gt; config --browser-version 124
+ *   selenium&gt; config --record false        ← disable session recording
+ *   selenium&gt; config --record true         ← re-enable session recording
  *   selenium&gt; config --show
  * </pre>
  */
 @Command(name = "config", description = "Configure browser options")
 public class ConfigCommand implements Runnable {
 
-    @Option(names = "--headless", description = "Enable headless mode (next session)")
+    @Option(names = "--record", arity = "0..1", fallbackValue = "true",
+            description = "Enable/disable session recording (default: true)")
+    private Boolean record;
+
+    @Option(names = "--headless", arity = "0..1", fallbackValue = "true",
+            description = "Enable/disable headless mode (next session)")
     private Boolean headless;
 
-    @Option(names = "--maximize", description = "Maximize the browser window")
+    @Option(names = "--maximize", arity = "0..1", fallbackValue = "true",
+            description = "Enable/disable maximize window")
     private Boolean maximize;
 
-    @Option(names = "--incognito", description = "Enable incognito mode (next session)")
+    @Option(names = "--incognito", arity = "0..1", fallbackValue = "true",
+            description = "Enable/disable incognito mode (next session)")
     private Boolean incognito;
 
     @Option(names = "--window-size", description = "Window size, e.g. 1920x1080 (next session)",
@@ -76,9 +86,22 @@ public class ConfigCommand implements Runnable {
             boolean sessionActive = SessionManager.getInstance().isActive();
 
             if (show) {
-                Map<String, Object> snapshot = config.toMap();
+                Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+                snapshot.put("sessionRecording", SessionRecorder.getInstance().isEnabled());
+                snapshot.putAll(config.toMap());
                 CommandResult.success("config", List.of("--show"), snapshot).print();
                 return;
+            }
+
+            // ── Session recording toggle ─────────────────────────
+            if (record != null) {
+                if (record) {
+                    SessionRecorder.getInstance().enable();
+                    applied.add("sessionRecording=true");
+                } else {
+                    SessionRecorder.getInstance().disable();
+                    applied.add("sessionRecording=false");
+                }
             }
 
             // Apply settings to BrowserConfig

@@ -35,8 +35,7 @@ An interactive REPL and one-shot command-line interface that exposes **Selenium 
      ###                                                                  ###
        ###                                                               ###
         ###################################################################
-           #############################################################
-
+           
      Selenium CLI  v1.0.0                                                                                                                           
      Type 'help' or '--help' for usage
      Type 'exit' to leave
@@ -65,6 +64,8 @@ selenium> open https://google.com
   - [REPL (Interactive) Mode](#repl-interactive-mode)
   - [One-Shot Mode](#one-shot-mode)
   - [Piped / Scripted Mode](#piped--scripted-mode)
+- [Startup Options Display](#startup-options-display)
+- [Session Recording](#session-recording)
 - [Tab-Completion & Autocomplete](#tab-completion--autocomplete)
   - [Command-Level Completion](#command-level-completion)
   - [Value-Level Completion (Smart Suggestions)](#value-level-completion-smart-suggestions)
@@ -112,6 +113,8 @@ selenium> open https://google.com
 ## Features
 
 - **Interactive REPL** — explore and automate browsers conversationally
+- **Startup options display** — on launch, every option is printed as ENABLED or disabled so you always know the active configuration
+- **Session recording (on by default)** — every REPL session is automatically recorded to a replayable JSON file; disable with `--no-record`
 - **Tab-completion & autocomplete** — press `Tab` to see command names, options, and smart value suggestions powered by JLine3 + Picocli
 - **ANSI color output** — colored banner, prompt, and help text for a modern terminal experience
 - **One-shot mode** — run a single command from your shell and exit
@@ -258,6 +261,178 @@ echo screenshot example.png
 echo quit
 ) | selenium
 ```
+
+---
+
+## Startup Options Display
+
+When the REPL starts, a status block is printed immediately after the banner showing the current state of **every option** — so you always know exactly what configuration is active:
+
+```
+     Selenium CLI  v1.0.0
+     Type 'help' or '--help' for usage
+     Type 'exit' to leave
+
+     ── Startup Options ──────────────────────────
+     Session Recording    : ENABLED
+     Headless             : disabled
+     Maximize             : disabled
+     Incognito            : disabled
+     Window Size          : off
+     User Data Dir        : off
+     Proxy                : off
+     Browser Version      : off
+     Extra Headers        : off
+     Chrome Arguments     : off
+     ─────────────────────────────────────────────
+     Use 'config --<option> true/false' to change at runtime
+     Use 'config --show' to view current settings
+```
+
+- **ENABLED** (green) — the option is active
+- **disabled / off** (dim) — the option is not set
+
+If you pre-configure options before starting the REPL, they will show up here:
+
+```bash
+# Pre-configure headless + window size, then start the REPL
+selenium config --headless --window-size 1920x1080
+selenium
+```
+
+```
+     Session Recording    : ENABLED
+     Headless             : ENABLED
+     Maximize             : disabled
+     Incognito            : disabled
+     Window Size          : 1920x1080
+     ...
+```
+
+This gives you at-a-glance confidence about the session you're about to use.
+
+### Changing Options at Runtime
+
+All options shown in the startup block can be **toggled on or off** during a live session using the `config` command. Boolean options accept `true` / `false`:
+
+| Option | Enable | Disable |
+|---|---|---|
+| Session Recording | `config --record` or `config --record true` | `config --record false` |
+| Headless | `config --headless` or `config --headless true` | `config --headless false` |
+| Maximize | `config --maximize` or `config --maximize true` | `config --maximize false` |
+| Incognito | `config --incognito` or `config --incognito true` | `config --incognito false` |
+| Window Size | `config --window-size 1920x1080` | *(set before next session)* |
+| Proxy | `config --proxy http://host:port` | *(set before next session)* |
+| Browser Version | `config --browser-version 124` | *(set before next session)* |
+
+Use `config --show` at any time to see the current state of all options:
+
+```
+selenium> config --show
+```
+
+> **Tip:** Use `config --help` to see all available options and their descriptions.
+
+---
+
+## Session Recording
+
+By default, every REPL session **automatically records** all executed commands to a JSON file. The file uses the **same format** as the `run --json` input, so you can replay any session.
+
+### How It Works
+
+1. When you start the REPL, a `SessionRecorder` begins capturing every replayable command
+2. Meta-commands (`help`, `exit`, `session`, `run`) are excluded — only browser actions are recorded
+3. When the session ends (`exit`, `Ctrl+D`, or `Ctrl+C`), the recording is saved to `session-<timestamp>.json` in the current directory
+
+### Example
+
+```
+selenium> open https://google.com
+selenium> type "input[name='q']" "Selenium CLI"
+selenium> screenshot search.png
+selenium> quit
+selenium> exit
+{"session_recorded": "C:\\TestAutomation\\selenium-cli\\session-2026-03-31_14-30-00.json"}
+```
+
+The saved file looks like this:
+
+```json
+[
+  {
+    "command": "open",
+    "args": ["https://google.com"]
+  },
+  {
+    "command": "type",
+    "args": ["input[name\u0027q\u0027]", "Selenium CLI"]
+  },
+  {
+    "command": "screenshot",
+    "args": ["search.png"]
+  },
+  {
+    "command": "quit",
+    "args": []
+  }
+]
+```
+
+### Replaying a Recorded Session
+
+```bash
+selenium run --json session-2026-03-31_14-30-00.json
+```
+
+### Disabling Session Recording
+
+Recording is **on by default**. There are two ways to control it:
+
+#### At startup — `--no-record` flag
+
+Start the REPL with recording disabled from the very beginning:
+
+```bash
+selenium --no-record
+```
+
+The startup options display will reflect this:
+
+```
+     Session Recording    : disabled
+```
+
+#### At runtime — `config --record`
+
+Toggle recording on or off at any time during a live session:
+
+```
+selenium> config --record false      ← disable recording
+selenium> config --record true       ← re-enable recording
+selenium> config --record            ← shorthand for --record true
+```
+
+Use `config --show` to verify the current state:
+
+```
+selenium> config --show
+{
+  "status": "success",
+  "command": "config",
+  "args": ["--show"],
+  "result": {
+    "sessionRecording": true,
+    "headless": false,
+    ...
+  }
+}
+```
+
+> **Tip:** You can combine `--record` with other config flags:
+> ```
+> selenium> config --record false --headless --window-size 1920x1080
+> ```
 
 ---
 
@@ -597,22 +772,27 @@ config [options]
 
 | Option | Description | Live-apply? |
 |---|---|---|
-| `--headless` | Enable headless mode | ❌ Next session |
-| `--maximize` | Maximize window | ✅ Yes |
-| `--incognito` | Incognito mode | ❌ Next session |
+| `--record [true\|false]` | Enable/disable session recording | ✅ Yes |
+| `--headless [true\|false]` | Enable/disable headless mode | ❌ Next session |
+| `--maximize [true\|false]` | Enable/disable maximize window | ✅ Yes |
+| `--incognito [true\|false]` | Enable/disable incognito mode | ❌ Next session |
 | `--window-size <WxH>` | Set window size (e.g. `1920x1080`) | ❌ Next session |
 | `--user-data-dir <path>` | Chrome user data directory | ❌ Next session |
 | `--proxy <url>` | HTTP/S proxy (e.g. `http://host:port`) | ❌ Next session |
 | `--browser-version <ver>` | Chrome version for Selenium Manager | ❌ Next session |
 | `--header <Name:Value>` | Add custom HTTP header (repeatable) | ✅ Yes (via CDP) |
 | `--options <args>` | Raw Chrome arguments, comma-separated | ❌ Next session |
-| `--show` | Print current configuration | — |
+| `--show` | Print current configuration (incl. recording) | — |
 
 **Examples:**
 
 ```bash
-# View current config
+# View current config (includes sessionRecording status)
 selenium> config --show
+
+# Toggle session recording on/off during a live session
+selenium> config --record false
+selenium> config --record true
 
 # Set up headless with custom size before opening
 selenium> config --headless --window-size 1920x1080
@@ -624,6 +804,11 @@ selenium> config --header "X-Custom:myvalue"
 
 # Maximize the current window
 selenium> config --maximize
+
+# Disable options that were previously enabled
+selenium> config --headless false
+selenium> config --maximize false
+selenium> config --incognito false
 
 # Multiple options for next session
 selenium> config --incognito --proxy http://127.0.0.1:8080
@@ -1037,7 +1222,8 @@ selenium-cli/
     │   └── NoActiveSessionException.java
     └── util/
         ├── JsonOutput.java          # Centralized Gson instance
-        └── LocatorParser.java       # Auto-detect locator strategy
+        ├── LocatorParser.java       # Auto-detect locator strategy
+        └── SessionRecorder.java     # Records REPL commands for replay
 ```
 
 ### Key Classes
@@ -1051,6 +1237,7 @@ selenium-cli/
 | `CommandRequest` | POJO deserialized from batch JSON files (`{ "command": "...", "args": [...] }`). |
 | `LocatorParser` | Stateless utility: parses a raw locator string into a Selenium `By` object. |
 | `JsonOutput` | Provides a shared `Gson` instance with pretty-printing and HTML escaping disabled. |
+| `SessionRecorder` | Records all REPL commands during a session and writes them to a replayable JSON file on exit. |
 
 #### Completion Candidate Classes (`cli.completions`)
 
