@@ -21,6 +21,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.IExecutionExceptionHandler;
 import picocli.shell.jline3.PicocliCommands;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -125,24 +126,43 @@ public class SeleniumCli implements Runnable {
         // Suppress Selenium's internal JUL warnings so only clean JSON hits stdout/stderr
         Logger.getLogger("org.openqa.selenium").setLevel(Level.SEVERE);
 
-        // Check for --no-record before Picocli routing
+        // Load persisted config from .selenium-cli.json (if it exists)
+        BrowserConfig.getInstance().load();
+
+        // Separate startup flags from the actual command tokens
         boolean noRecordFlag = false;
-        List<String> filteredArgs = new ArrayList<>();
+        List<String> commandArgs = new ArrayList<>();
         for (String arg : args) {
             if ("--no-record".equals(arg)) {
                 noRecordFlag = true;
             } else {
-                filteredArgs.add(arg);
+                commandArgs.add(arg);
             }
         }
 
-        if (!filteredArgs.isEmpty()) {
-            // One-shot mode: execute the command and exit (no recording in one-shot)
+        // Detect whether the command is 'config' — if so, apply it then enter the REPL
+        boolean isConfigCommand = !commandArgs.isEmpty()
+                && "config".equalsIgnoreCase(commandArgs.get(0));
+
+        if (isConfigCommand) {
+            // Execute the config command silently (applies settings + persists to disk)
+            // Suppress JSON output — the startup options block will show the applied config
             CommandLine cli = buildCommandLine();
-            int exitCode = cli.execute(filteredArgs.toArray(new String[0]));
+            PrintStream originalOut = System.out;
+            System.setOut(new PrintStream(java.io.OutputStream.nullOutputStream()));
+            cli.execute(commandArgs.toArray(new String[0]));
+            System.setOut(originalOut);
+            // Then fall through into the REPL with the config active
+            SeleniumCli app = new SeleniumCli();
+            app.noRecord = noRecordFlag;
+            app.repl();
+        } else if (!commandArgs.isEmpty()) {
+            // One-shot mode for all other commands: execute and exit
+            CommandLine cli = buildCommandLine();
+            int exitCode = cli.execute(commandArgs.toArray(new String[0]));
             System.exit(exitCode);
         } else {
-            // REPL mode
+            // No arguments at all → REPL mode
             SeleniumCli app = new SeleniumCli();
             app.noRecord = noRecordFlag;
             app.repl();

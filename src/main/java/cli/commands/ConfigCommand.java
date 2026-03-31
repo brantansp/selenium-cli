@@ -179,6 +179,10 @@ public class ConfigCommand implements Runnable {
                     "applied", applied,
                     "warnings", warnings
             );
+
+            // Persist config to disk so one-shot commands survive across JVM invocations
+            config.save();
+
             CommandResult.success("config", Collections.emptyList(), result).print();
         } catch (Exception e) {
             CommandResult.error("config", Collections.emptyList(), e.getMessage()).print();

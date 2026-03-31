@@ -199,7 +199,10 @@ Set-Alias selenium 'java -jar C:\TestAutomation\selenium-cli\target\selenium-cli
 # Start the interactive REPL
 selenium
 
-# Or run a single command
+# Or pre-configure and enter the REPL in one go
+selenium config --headless --window-size 1920x1080
+
+# Or run a single command (one-shot mode — exits after execution)
 selenium open https://google.com
 selenium screenshot home.png
 selenium quit
@@ -226,6 +229,19 @@ Launch without arguments to enter the interactive Read-Eval-Print Loop:
 
 ```bash
 selenium
+```
+
+Or **pre-configure and enter the REPL** in a single command:
+
+```bash
+selenium config --headless --window-size 1920x1080
+```
+
+This applies the config, prints confirmation, and drops straight into the REPL with those settings active — ready for `open`, `click`, etc.
+
+```bash
+# Combine startup flags with config
+selenium --no-record config --headless --incognito
 ```
 
 - Type commands at the `selenium>` prompt
@@ -308,6 +324,11 @@ selenium
      Window Size          : 1920x1080
      ...
 ```
+
+> **How it works:** The `config` command persists all settings to a `.selenium-cli.json` file
+> in the current working directory. Every subsequent `selenium` invocation (REPL or one-shot)
+> loads this file on startup, so config set in one command carries to the next.
+> The file is automatically deleted when you run `quit`.
 
 This gives you at-a-glance confidence about the session you're about to use.
 
@@ -1041,10 +1062,33 @@ By default, execution **stops on the first error**. Use `--continue-on-error` to
 
 ### Config Lifecycle
 
-1. **Before a session** — Use `config` to set options. These are stored in the singleton `BrowserConfig`.
-2. **Session starts** — When `open` is called (or a session is started), `BrowserConfig.toChromeOptions()` builds the `ChromeOptions`.
-3. **During a session** — Only `--maximize` and `--header` can be applied to a live session. All other options show a warning and take effect on the **next** session.
-4. **On quit** — `BrowserConfig.reset()` clears all configuration back to defaults.
+1. **Before a session** — Use `config` to set options. These are stored in the singleton `BrowserConfig` **and persisted to `.selenium-cli.json`** in the current working directory.
+2. **Across JVM invocations** — On startup, `.selenium-cli.json` is loaded automatically. This means one-shot `config` commands carry over to subsequent invocations (e.g. `selenium config --headless` followed by `selenium open https://...`).
+3. **Session starts** — When `open` is called (or a session is started), `BrowserConfig.toChromeOptions()` builds the `ChromeOptions`.
+4. **During a session** — Only `--maximize` and `--header` can be applied to a live session. All other options show a warning and take effect on the **next** session.
+5. **On quit** — `BrowserConfig.reset()` clears all configuration back to defaults **and deletes `.selenium-cli.json`**.
+
+### Config File (`.selenium-cli.json`)
+
+The config file is created automatically when you run `config` and deleted on `quit`:
+
+```bash
+# Creates .selenium-cli.json with headless=true, windowSize=1920x1080
+selenium config --headless --window-size 1920x1080
+
+# This invocation loads .selenium-cli.json → opens headless with the saved size
+selenium open https://example.com
+
+# Cleans up the session and deletes .selenium-cli.json
+selenium quit
+```
+
+You can also inspect the file directly:
+
+```bash
+type .selenium-cli.json       # Windows
+cat .selenium-cli.json        # Linux/macOS
+```
 
 ### Default Chrome Arguments
 
