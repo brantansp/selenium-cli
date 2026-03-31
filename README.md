@@ -318,7 +318,10 @@ By default, every REPL session **automatically records** all executed commands t
 
 1. When the REPL starts, recording begins automatically
 2. Meta-commands (`help`, `exit`, `session`, `run`) are excluded — only browser actions are recorded
-3. When the session ends (`exit`, `Ctrl+D`, or `Ctrl+C`), the recording is saved to `session-<timestamp>.json`
+3. **Failed commands are excluded** — only successful commands are saved, so replaying the session won't reproduce errors
+4. When the session ends (`exit`, `Ctrl+D`, or `Ctrl+C`), the recording is saved to `session-<timestamp>.json`
+
+> **Tip:** If your recording doesn't end with `quit`, add it manually before replaying — otherwise the browser will stay open after `run --json` finishes.
 
 ### Example
 

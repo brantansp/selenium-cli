@@ -311,10 +311,27 @@ public class SeleniumCli implements Runnable {
                 String[] tokens = tokenize(line);
                 if (tokens.length == 0) continue;
 
-                // Record the command for session replay (respects enabled/disabled state)
-                recorder.record(tokens);
+                // Capture output to detect success/failure
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                PrintStream capture = new PrintStream(baos, true, java.nio.charset.StandardCharsets.UTF_8);
+                PrintStream originalOut = System.out;
+                System.setOut(capture);
+                try {
+                    cli.execute(tokens);
+                } finally {
+                    System.setOut(originalOut);
+                }
+                String output = baos.toString(java.nio.charset.StandardCharsets.UTF_8);
 
-                cli.execute(tokens);
+                // Print the output to the user
+                if (!output.isEmpty()) {
+                    System.out.print(output);
+                }
+
+                // Only record successful commands (skip failures so replay won't break)
+                if (!output.contains("\"status\": \"error\"")) {
+                    recorder.record(tokens);
+                }
             }
 
             terminal.close();

@@ -338,8 +338,11 @@ Every command MUST return structured JSON via:
 The first arg to `success`/`error` MUST match the `@Command(name = "...")`.
 
 ### Session recording
-`SessionRecorder` records commands automatically. Meta-commands excluded:
-`help`, `exit`, `session`, `run`, `--help`, `-h`.
+`SessionRecorder` records commands automatically. Only **successful** commands
+are recorded — failed commands are excluded so that replaying the session
+with `run --json` won't reproduce failures. The recording is a faithful
+replay of what the user typed — no commands are auto-appended.
+Meta-commands are also excluded: `help`, `exit`, `session`, `run`, `--help`, `-h`.
 If your new command is a meta/utility command that should NOT be recorded,
 add it to `EXCLUDED_COMMANDS` in `SessionRecorder.java`.
 
