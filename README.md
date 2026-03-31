@@ -338,13 +338,29 @@ selenium> exit
 The saved file:
 
 ```json
-[
-  { "command": "open", "args": ["https://google.com"] },
-  { "command": "type", "args": ["input[name='q']", "Selenium CLI"] },
-  { "command": "screenshot", "args": ["search.png"] },
-  { "command": "quit", "args": [] }
-]
+{
+  "config": {
+    "headless": false,
+    "maximize": false,
+    "incognito": false,
+    "windowSize": null,
+    "userDataDir": null,
+    "proxyUrl": null,
+    "browserVersion": null,
+    "pageLoadStrategy": "normal",
+    "extraHeaders": {},
+    "rawArguments": []
+  },
+  "commands": [
+    { "step": 1, "command": "open", "args": ["https://google.com"] },
+    { "step": 2, "command": "type", "args": ["input[name='q']", "Selenium CLI"] },
+    { "step": 3, "command": "screenshot", "args": ["search.png"] },
+    { "step": 4, "command": "quit", "args": [] }
+  ]
+}
 ```
+
+The `config` section is a **faithful snapshot** of the browser settings at the time of saving, so replaying with `run --json` restores the exact same configuration.
 
 ### Replaying a Recorded Session
 
