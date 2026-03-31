@@ -56,13 +56,28 @@ import java.util.logging.Logger;
         subcommands = {
                 OpenCommand.class,
                 ClickCommand.class,
+                DblClickCommand.class,
+                RightClickCommand.class,
                 TypeCommand.class,
+                ClearCommand.class,
+                SubmitCommand.class,
+                SelectCommand.class,
+                KeysCommand.class,
                 GetTextCommand.class,
                 GetAttrCommand.class,
+                HoverCommand.class,
+                DragDropCommand.class,
+                ScrollCommand.class,
+                HighlightCommand.class,
                 ScreenshotCommand.class,
                 NavigateCommand.class,
                 WaitCommand.class,
                 ExecuteJsCommand.class,
+                SwitchFrameCommand.class,
+                SwitchWindowCommand.class,
+                TabsCommand.class,
+                UrlCommand.class,
+                TitleCommand.class,
                 ConfigCommand.class,
                 RunCommand.class,
                 SessionCommand.class,
@@ -449,10 +464,46 @@ public class SeleniumCli implements Runnable {
                 new StringsCompleter(iterableToList(new LocatorCandidates())),
                 NullCompleter.INSTANCE));
 
+        // dblclick <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("dblclick"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // rightclick <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("rightclick"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
         // type <locator> <text>
         completers.add(new ArgumentCompleter(
                 new StringsCompleter("type"),
                 new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // clear <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("clear"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // submit <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("submit"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // select <locator> <text>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("select"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // keys <key>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("keys"),
+                new StringsCompleter(iterableToList(new KeyCandidates())),
                 NullCompleter.INSTANCE));
 
         // gettext <locator>
@@ -490,6 +541,31 @@ public class SeleniumCli implements Runnable {
         completers.add(new ArgumentCompleter(
                 new StringsCompleter("screenshot"),
                 new StringsCompleter(iterableToList(new ScreenshotPathCandidates())),
+                NullCompleter.INSTANCE));
+
+        // hover <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("hover"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // dragdrop <source> <target>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("dragdrop"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // highlight <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("highlight"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // switchframe <locator>
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("switchframe"),
+                new StringsCompleter(iterableToList(new LocatorCandidates())),
                 NullCompleter.INSTANCE));
 
         return completers;

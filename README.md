@@ -70,13 +70,28 @@ selenium> open https://google.com
 - [Commands Reference](#commands-reference)
   - [open](#open)
   - [click](#click)
+  - [dblclick](#dblclick)
+  - [rightclick](#rightclick)
   - [type](#type)
+  - [clear](#clear)
+  - [submit](#submit)
+  - [select](#select)
+  - [keys](#keys)
   - [gettext](#gettext)
   - [getattr](#getattr)
+  - [hover](#hover)
+  - [dragdrop](#dragdrop)
+  - [scroll](#scroll)
+  - [highlight](#highlight)
   - [screenshot](#screenshot)
   - [navigate](#navigate)
   - [wait](#wait)
   - [execute](#execute)
+  - [switchframe](#switchframe)
+  - [switchwindow](#switchwindow)
+  - [tabs](#tabs)
+  - [url](#url)
+  - [title](#title)
   - [config](#config)
   - [session](#session)
   - [run](#run)
@@ -410,6 +425,40 @@ selenium> click "input[type='submit']"
 
 ---
 
+### `dblclick`
+
+Double-click an element.
+
+```
+dblclick <locator>
+```
+
+**Examples:**
+
+```bash
+selenium> dblclick #row-1
+selenium> dblclick .editable-cell
+```
+
+---
+
+### `rightclick`
+
+Right-click (context click) an element to open context menus.
+
+```
+rightclick <locator>
+```
+
+**Examples:**
+
+```bash
+selenium> rightclick #canvas
+selenium> rightclick .context-menu-target
+```
+
+---
+
 ### `type`
 
 Type text into an input element.
@@ -430,6 +479,88 @@ type <locator> <text> [--clear]
 selenium> type #email user@test.com
 selenium> type #email "new-user@test.com" --clear
 selenium> type "input[name='password']" "my secret"
+```
+
+---
+
+### `clear`
+
+Clear the content of an input or textarea field.
+
+```
+clear <locator>
+```
+
+**Examples:**
+
+```bash
+selenium> clear #email
+selenium> clear "input[name='search']"
+```
+
+---
+
+### `submit`
+
+Submit a form. Works on the form element itself or any element inside a form.
+
+```
+submit <locator>
+```
+
+**Examples:**
+
+```bash
+selenium> submit #login-form
+selenium> submit #username
+```
+
+---
+
+### `select`
+
+Select an option from a `<select>` dropdown by visible text, value, or index.
+
+```
+select <locator> [text] [--value <val>] [--index <n>]
+```
+
+| Parameter | Required | Description |
+|---|---|---|
+| `locator` | Yes | Locator for the `<select>` element |
+| `text` | No | Visible text of the option |
+| `--value` | No | Option `value` attribute |
+| `--index` | No | Zero-based option index |
+
+**Examples:**
+
+```bash
+selenium> select #country "United States"
+selenium> select #country --value us
+selenium> select #country --index 3
+```
+
+---
+
+### `keys`
+
+Send special keyboard keys or key combinations to the active element or a specific element.
+
+```
+keys <key> [--to <locator>]
+```
+
+Supports: `ENTER`, `TAB`, `ESCAPE`, `BACKSPACE`, `DELETE`, `SPACE`, arrow keys (`UP`, `DOWN`, `LEFT`, `RIGHT`), `HOME`, `END`, `PAGEUP`, `PAGEDOWN`, `F1`–`F12`, and combos like `CONTROL+a`, `CONTROL+c`, `SHIFT+TAB`.
+
+**Examples:**
+
+```bash
+selenium> keys ENTER
+selenium> keys TAB
+selenium> keys ESCAPE
+selenium> keys CONTROL+a
+selenium> keys CONTROL+c
+selenium> keys --to #search ENTER
 ```
 
 ---
@@ -466,6 +597,96 @@ getattr <locator> <attribute>
 selenium> getattr #logo src
 selenium> getattr "//input[@name='q']" value
 selenium> getattr .main-link href
+```
+
+---
+
+### `hover`
+
+Move the mouse over an element (hover). Useful for triggering dropdown menus and tooltips.
+
+```
+hover <locator>
+```
+
+**Examples:**
+
+```bash
+selenium> hover .dropdown-toggle
+selenium> hover #menu-item
+selenium> hover "nav > ul > li:first-child"
+```
+
+---
+
+### `dragdrop`
+
+Drag one element and drop it onto another.
+
+```
+dragdrop <source-locator> <target-locator>
+```
+
+**Examples:**
+
+```bash
+selenium> dragdrop #source #target
+selenium> dragdrop .draggable .droppable
+```
+
+---
+
+### `scroll`
+
+Scroll the page by pixels, to an element, or to the top/bottom.
+
+```
+scroll [--down N] [--up N] [--left N] [--right N] [--to <locator>] [--top] [--bottom]
+```
+
+| Option | Description |
+|---|---|
+| `--down <px>` | Scroll down by N pixels |
+| `--up <px>` | Scroll up by N pixels |
+| `--right <px>` | Scroll right by N pixels |
+| `--left <px>` | Scroll left by N pixels |
+| `--to <locator>` | Scroll to bring an element into view |
+| `--top` | Scroll to the top of the page |
+| `--bottom` | Scroll to the bottom of the page |
+
+**Examples:**
+
+```bash
+selenium> scroll --down 500
+selenium> scroll --up 300
+selenium> scroll --right 200
+selenium> scroll --to #footer
+selenium> scroll --bottom
+selenium> scroll --top
+```
+
+---
+
+### `highlight`
+
+Highlight an element with a colored border. Useful for visual debugging.
+
+```
+highlight <locator> [--color <color>] [--duration <seconds>]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--color` | `red` | Border color (any CSS color) |
+| `--duration` | `3` | How long to show the highlight (seconds) |
+
+**Examples:**
+
+```bash
+selenium> highlight #login-btn
+selenium> highlight .error-msg --color red
+selenium> highlight #logo --color blue --duration 5
+selenium> highlight "input[name='q']" --color green
 ```
 
 ---
@@ -533,6 +754,89 @@ selenium> execute "window.scrollTo(0, document.body.scrollHeight)"
 ```
 
 If the script returns a value (via `return`), it is included in the JSON `result` field.
+
+---
+
+### `switchframe`
+
+Switch the driver context to an iframe, or back to the main document.
+
+```
+switchframe [locator] [--index <n>] [--parent] [--main]
+```
+
+| Option | Description |
+|---|---|
+| `<locator>` | Switch to frame by element locator |
+| `--index <n>` | Switch to frame by zero-based index |
+| `--parent` | Switch to the parent frame |
+| `--main` | Switch back to the top-level document |
+
+**Examples:**
+
+```bash
+selenium> switchframe #my-iframe
+selenium> switchframe --index 0
+selenium> switchframe --parent
+selenium> switchframe --main
+```
+
+---
+
+### `switchwindow`
+
+Switch between browser windows/tabs, open a new tab, or close the current one.
+
+```
+switchwindow [handle] [--next] [--previous] [--new] [--close]
+```
+
+| Option | Description |
+|---|---|
+| `--next` | Switch to the next tab |
+| `--previous` | Switch to the previous tab |
+| `--new` | Open a new blank tab |
+| `--close` | Close the current tab and switch to the remaining one |
+| `<handle>` | Switch to a specific window handle |
+
+**Examples:**
+
+```bash
+selenium> switchwindow --next
+selenium> switchwindow --previous
+selenium> switchwindow --new
+selenium> switchwindow --close
+```
+
+---
+
+### `tabs`
+
+List all open browser tabs/windows with their handles, titles, and URLs.
+
+```
+tabs
+```
+
+---
+
+### `url`
+
+Print the current page URL.
+
+```
+url
+```
+
+---
+
+### `title`
+
+Print the current page title.
+
+```
+title
+```
 
 ---
 
