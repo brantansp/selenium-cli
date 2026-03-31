@@ -95,6 +95,7 @@ selenium> open https://google.com
   - [config](#config)
   - [session](#session)
   - [run](#run)
+  - [history](#history)
   - [quit](#quit)
   - [exit (REPL only)](#exit-repl-only)
 - [Locator Syntax](#locator-syntax)
@@ -904,6 +905,37 @@ run --json <file> [--output <file>] [--continue-on-error]
 | `--continue-on-error` | No | Don't stop on first error |
 
 See [Batch Execution](#batch-execution-json-scripts) for the JSON file format.
+
+---
+
+### `history`
+
+Display all successful commands recorded in the current session. Only commands that succeeded are shown (failed commands are never recorded). Use `--clear` to reset the history.
+
+```
+history [--clear]
+```
+
+**Examples:**
+
+```bash
+selenium> history
+{
+  "status": "success",
+  "command": "history",
+  "result": {
+    "recording": "enabled",
+    "count": 3,
+    "commands": [
+      { "step": 1, "command": "open", "args": ["https://google.com"] },
+      { "step": 2, "command": "click", "args": ["#login"] },
+      { "step": 3, "command": "screenshot", "args": ["page.png"] }
+    ]
+  }
+}
+
+selenium> history --clear
+```
 
 ---
 

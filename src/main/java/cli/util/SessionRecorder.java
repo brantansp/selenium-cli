@@ -1,6 +1,8 @@
 package cli.util;
 
+import cli.config.BrowserConfig;
 import cli.model.CommandRequest;
+import cli.model.SessionFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -36,7 +39,7 @@ public class SessionRecorder {
 
     /** Commands that should NOT be recorded (non-replayable meta commands). */
     private static final Set<String> EXCLUDED_COMMANDS = Set.of(
-            "help", "exit", "session", "run", "--help", "-h"
+            "help", "exit", "session", "run", "history", "--help", "-h"
     );
 
     private boolean enabled = true;
@@ -72,6 +75,13 @@ public class SessionRecorder {
     }
 
     /**
+     * @return an unmodifiable view of the recorded commands so far.
+     */
+    public List<CommandRequest> getCommands() {
+        return Collections.unmodifiableList(commands);
+    }
+
+    /**
      * @return {@code true} if at least one replayable command has been recorded.
      */
     public boolean hasRecords() {
@@ -79,10 +89,22 @@ public class SessionRecorder {
     }
 
     /**
+     * Build a {@link SessionFile} with numbered steps and a config snapshot.
+     */
+    private SessionFile buildSessionFile() {
+        List<CommandRequest> numbered = new ArrayList<>();
+        for (int i = 0; i < commands.size(); i++) {
+            CommandRequest src = commands.get(i);
+            numbered.add(new CommandRequest(i + 1, src.getCommand(), src.getArgs()));
+        }
+        return new SessionFile(BrowserConfig.getInstance().toMap(), numbered);
+    }
+
+    /**
      * Write the recorded commands to a JSON file and return the path.
      * <p>
-     * The file is named {@code session-<timestamp>.json} and placed in the
-     * current working directory.
+     * The file includes step numbers and a snapshot of the browser config
+     * so the session can be replayed with the exact same settings.
      *
      * @return the absolute path of the written file
      * @throws IOException if writing fails
@@ -91,7 +113,7 @@ public class SessionRecorder {
         String timestamp = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         Path path = Path.of("session-" + timestamp + ".json");
-        String json = JsonOutput.toJson(commands);
+        String json = JsonOutput.toJson(buildSessionFile());
         Files.writeString(path, json, StandardCharsets.UTF_8);
         return path.toAbsolutePath();
     }
@@ -104,7 +126,7 @@ public class SessionRecorder {
      * @throws IOException if writing fails
      */
     public Path save(Path outputPath) throws IOException {
-        String json = JsonOutput.toJson(commands);
+        String json = JsonOutput.toJson(buildSessionFile());
         Files.writeString(outputPath, json, StandardCharsets.UTF_8);
         return outputPath.toAbsolutePath();
     }

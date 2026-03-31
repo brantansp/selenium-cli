@@ -53,6 +53,7 @@ selenium-cli/
     │   ├── TitleCommand.java
     │   ├── ConfigCommand.java
     │   ├── RunCommand.java
+    │   ├── HistoryCommand.java
     │   ├── SessionCommand.java
     │   └── QuitCommand.java
     ├── completions/                      # Tab-completion candidate providers (Iterable<String>)
@@ -342,7 +343,7 @@ The first arg to `success`/`error` MUST match the `@Command(name = "...")`.
 are recorded — failed commands are excluded so that replaying the session
 with `run --json` won't reproduce failures. The recording is a faithful
 replay of what the user typed — no commands are auto-appended.
-Meta-commands are also excluded: `help`, `exit`, `session`, `run`, `--help`, `-h`.
+Meta-commands are also excluded: `help`, `exit`, `session`, `run`, `history`, `--help`, `-h`.
 If your new command is a meta/utility command that should NOT be recorded,
 add it to `EXCLUDED_COMMANDS` in `SessionRecorder.java`.
 

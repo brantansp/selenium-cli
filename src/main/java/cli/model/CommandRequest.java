@@ -3,15 +3,16 @@ package cli.model;
 import java.util.List;
 
 /**
- * Represents a single command in a JSON batch file for {@code run --json}.
+ * Represents a single command in a JSON batch/session file.
  *
  * Example JSON:
  * <pre>
- * { "command": "open", "args": ["https://google.com"] }
+ * { "step": 1, "command": "open", "args": ["https://google.com"] }
  * </pre>
  */
 public class CommandRequest {
 
+    private Integer step;
     private String command;
     private List<String> args;
 
@@ -21,6 +22,15 @@ public class CommandRequest {
         this.command = command;
         this.args = args;
     }
+
+    public CommandRequest(int step, String command, List<String> args) {
+        this.step = step;
+        this.command = command;
+        this.args = args;
+    }
+
+    public Integer getStep() { return step; }
+    public void setStep(Integer step) { this.step = step; }
 
     public String getCommand() { return command; }
     public void setCommand(String command) { this.command = command; }

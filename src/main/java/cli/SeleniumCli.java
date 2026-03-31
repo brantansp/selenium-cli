@@ -80,6 +80,7 @@ import java.util.logging.Logger;
                 TitleCommand.class,
                 ConfigCommand.class,
                 RunCommand.class,
+                HistoryCommand.class,
                 SessionCommand.class,
                 QuitCommand.class
         }
