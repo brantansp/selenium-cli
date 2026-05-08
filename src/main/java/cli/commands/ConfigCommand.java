@@ -7,6 +7,7 @@ import cli.completions.WindowSizeCandidates;
 import cli.config.BrowserConfig;
 import cli.model.CommandResult;
 import cli.session.SessionManager;
+import cli.util.PropertiesFileLoader;
 import cli.util.SessionRecorder;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -72,6 +73,15 @@ public class ConfigCommand implements Runnable {
             description = "Raw Chrome arguments, comma-separated (next session)",
             completionCandidates = ChromeArgCandidates.class)
     private List<String> rawOptions;
+
+    @Option(names = "--load-file",
+            description = "Load browser config from a .properties file (next session). "
+                    + "The file path is remembered across sessions — auto-loaded on every future startup.")
+    private String loadFile;
+
+    @Option(names = "--clear-source",
+            description = "Forget the auto-load .properties file (stop auto-loading on startup)")
+    private boolean clearSource;
 
     @Option(names = "--show", description = "Print current configuration")
     private boolean show;
@@ -167,6 +177,29 @@ public class ConfigCommand implements Runnable {
                 rawOptions.forEach(config::addArgument);
                 applied.add("rawOptions added: " + rawOptions);
                 if (sessionActive) warnings.add("rawOptions will apply on next session");
+            }
+            if (loadFile != null) {
+                try {
+                    // Resolve to absolute path so it works from any working directory
+                    java.nio.file.Path resolved = java.nio.file.Path.of(loadFile).toAbsolutePath();
+                    PropertiesFileLoader.LoadResult loadResult =
+                            PropertiesFileLoader.load(resolved.toString(), config);
+                    applied.addAll(loadResult.getApplied());
+                    warnings.addAll(loadResult.getWarnings());
+                    applied.add("loadedFrom=" + resolved);
+                    // Persist the absolute path so every future startup auto-reloads from it
+                    config.saveSource(resolved.toString());
+                    applied.add("autoLoadRegistered=" + resolved);
+                    if (sessionActive) warnings.add("settings from --load-file will apply on next session");
+                } catch (Exception e) {
+                    CommandResult.error("config", List.of("--load-file", loadFile),
+                            "Failed to load properties file: " + e.getMessage()).print();
+                    return;
+                }
+            }
+            if (clearSource) {
+                config.clearSource();
+                applied.add("autoLoadCleared=true");
             }
 
             if (applied.isEmpty() && warnings.isEmpty()) {

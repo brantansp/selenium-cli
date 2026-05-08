@@ -1,8 +1,11 @@
 package cli.model;
 
+import cli.config.BrowserConfig;
 import cli.util.JsonOutput;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,12 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @DisplayName("SessionFile")
 class SessionFileTest {
+
+    @BeforeEach
+    void setUp() { BrowserConfig.getInstance().reset(); }
+
+    @AfterEach
+    void tearDown() { BrowserConfig.getInstance().reset(); }
 
     @Nested
     @DisplayName("POJO behaviour")
@@ -150,6 +159,31 @@ class SessionFileTest {
             assertEquals("open", requests.get(0).getCommand());
             assertNull(requests.get(0).getStep());
             assertEquals("quit", requests.get(1).getCommand());
+        }
+
+        @Test
+        @DisplayName("BrowserConfig.toMap() snapshot includes chromePreferences and chromeCapabilities")
+        void configSnapshotIncludesNewFields() {
+            BrowserConfig cfg = BrowserConfig.getInstance();
+            cfg.addPreference("download.prompt_for_download", false);
+            cfg.addCapability("acceptInsecureCerts", true);
+
+            Map<String, Object> configSnapshot = cfg.toMap();
+            SessionFile sf = new SessionFile(configSnapshot,
+                    List.of(new CommandRequest(1, "open", List.of("https://example.com"))));
+
+            String json = JsonOutput.toJson(sf);
+            JsonObject root = JsonOutput.gson().fromJson(json, JsonObject.class);
+            JsonObject cfgObj = root.getAsJsonObject("config");
+
+            assertTrue(cfgObj.has("chromePreferences"),
+                    "config snapshot must contain chromePreferences");
+            assertTrue(cfgObj.has("chromeCapabilities"),
+                    "config snapshot must contain chromeCapabilities");
+            assertFalse(cfgObj.getAsJsonObject("chromePreferences").isEmpty(),
+                    "chromePreferences should have at least one entry");
+            assertFalse(cfgObj.getAsJsonObject("chromeCapabilities").isEmpty(),
+                    "chromeCapabilities should have at least one entry");
         }
     }
 }

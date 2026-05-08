@@ -285,6 +285,9 @@ When the REPL starts, a status block is printed after the banner showing the cur
      Browser Version      : off
      Extra Headers        : off
      Chrome Arguments     : off
+     Chrome Prefs         : off
+     Capabilities         : off
+     Auto-load File       : off
      ─────────────────────────────────────────────
      Use 'config --<option> true/false' to change at runtime
      Use 'config --show' to view current settings
@@ -880,6 +883,8 @@ config [options]
 | `--browser-version <ver>` | Chrome version for Selenium Manager | ❌ Next session |
 | `--header <Name:Value>` | Add custom HTTP header (repeatable) | ✅ Yes (via CDP) |
 | `--options <args>` | Raw Chrome arguments, comma-separated | ❌ Next session |
+| `--load-file <path>` | Load config from a `.properties` file | ❌ Next session |
+| `--clear-source` | Forget the auto-load `.properties` file | ✅ Immediate |
 | `--show` | Print current configuration | — |
 
 **Examples:**
@@ -892,6 +897,7 @@ selenium> config --maximize
 selenium> config --headless false
 selenium> config --record false
 selenium> config --incognito --proxy http://127.0.0.1:8080
+selenium> config --load-file config.properties
 ```
 
 ---
@@ -1113,6 +1119,77 @@ selenium> config --header "X-Request-Id:test-123"
 ```bash
 selenium> config --browser-version 124
 selenium> open https://example.com
+```
+
+---
+
+### Externalized Configuration
+
+Load all browser settings from a standard `.properties` file in one command:
+
+```bash
+selenium> config --load-file config.properties
+selenium> config --show
+selenium> open https://example.com
+```
+
+The file path is **remembered** in `.selenium-cli-source` (a lightweight pointer file that survives `quit` and JVM restarts). Every subsequent REPL startup or one-shot invocation auto-loads from it — no need to re-run `--load-file` after each session.
+
+```
+     Auto-load File       : C:\TestAutomation\selenium-cli\config.properties
+```
+
+To stop auto-loading:
+
+```bash
+selenium> config --clear-source
+```
+
+Or as a one-shot invocation that survives the JVM restart:
+
+```bash
+selenium config --load-file config.properties
+selenium open https://example.com
+selenium screenshot page.png
+selenium quit
+```
+
+#### Supported `.properties` Key Mapping
+
+| Key prefix | Maps to | Notes |
+|---|---|---|
+| `browser.chrome.version` | `browserVersion` | e.g. `135` |
+| `browser.chrome.arguments.*` | `rawArguments` | value is a raw Chrome arg string; multi-arg values split on `--` |
+| `browser.proxy.manual` | `proxyUrl` | e.g. `http://host:8080` |
+| `browser.chrome.preferences.*` | Chrome `prefs` map | suffix becomes the pref key |
+| `browser.chrome.capabilities.*` | `setCapability()` | suffix becomes the cap name |
+| Other `browser.*` keys | warnings list | logged but not applied |
+
+#### Variable Interpolation
+
+Three placeholder syntaxes are resolved before mapping:
+
+| Syntax | Resolves to |
+|---|---|
+| `${sys:user.dir}` | `System.getProperty("user.dir")` |
+| `${const:java.io.File.separator}` | static field via reflection |
+| `${fs}` (chained) | value of the `fs` property in the same file |
+
+If a placeholder cannot be resolved (missing system property, bad class name), its raw token is kept as-is and a warning is added to the result.
+
+#### Example `config.properties`
+
+```properties
+fs=${const:java.io.File.separator}
+browser.chrome.version=135
+browser.chrome.arguments.sandbox=--no-sandbox
+browser.chrome.arguments.gpu=--disable-gpu
+browser.chrome.arguments.lang=--lang=en-US
+browser.chrome.preferences.download.prompt_for_download=false
+browser.chrome.preferences.safebrowsing.enabled=true
+browser.chrome.preferences.download.default_directory=${sys:user.dir}${fs}Downloads
+browser.chrome.capabilities.acceptInsecureCerts=true
+browser.proxy.manual=http://proxy.example.com:3128
 ```
 
 ---

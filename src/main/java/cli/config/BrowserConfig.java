@@ -27,7 +27,9 @@ import java.util.Map;
 public class BrowserConfig {
 
     private static final BrowserConfig INSTANCE = new BrowserConfig();
-    private static final String CONFIG_FILE = ".selenium-cli.json";
+    private static final String CONFIG_FILE  = ".selenium-cli.json";
+    /** Stores the path to the user's .properties file — survives quit and JVM restarts. */
+    private static final String SOURCE_FILE  = ".selenium-cli-source";
 
     private boolean headless;
     private boolean maximize;
@@ -39,6 +41,8 @@ public class BrowserConfig {
     private PageLoadStrategy pageLoadStrategy = PageLoadStrategy.NORMAL;
     private final Map<String, String> extraHeaders = new LinkedHashMap<>();
     private final List<String> rawArguments = new ArrayList<>();
+    private final Map<String, Object> chromePreferences = new LinkedHashMap<>();
+    private final Map<String, Object> chromeCapabilities = new LinkedHashMap<>();
 
     private BrowserConfig() {}
 
@@ -65,6 +69,16 @@ public class BrowserConfig {
         return this;
     }
 
+    public BrowserConfig addPreference(String key, Object value) {
+        chromePreferences.put(key, value);
+        return this;
+    }
+
+    public BrowserConfig addCapability(String key, Object value) {
+        chromeCapabilities.put(key, value);
+        return this;
+    }
+
     // ── getters ─────────────────────────────────────────────────
 
     public boolean isHeadless()        { return headless; }
@@ -76,6 +90,8 @@ public class BrowserConfig {
     public String getBrowserVersion()  { return browserVersion; }
     public Map<String, String> getExtraHeaders() { return extraHeaders; }
     public List<String> getRawArguments() { return rawArguments; }
+    public Map<String, Object> getChromePreferences() { return chromePreferences; }
+    public Map<String, Object> getChromeCapabilities() { return chromeCapabilities; }
 
     // ── convert to ChromeOptions ────────────────────────────────
 
@@ -117,6 +133,16 @@ public class BrowserConfig {
             options.addArguments(arg);
         }
 
+        // Chrome preferences (e.g. download directory, geolocation, PDF handling)
+        if (!chromePreferences.isEmpty()) {
+            options.setExperimentalOption("prefs", new LinkedHashMap<>(chromePreferences));
+        }
+
+        // Arbitrary capabilities (e.g. acceptInsecureCerts, ACCEPT_SSL_CERTS)
+        for (Map.Entry<String, Object> entry : chromeCapabilities.entrySet()) {
+            options.setCapability(entry.getKey(), entry.getValue());
+        }
+
         return options;
     }
 
@@ -133,6 +159,8 @@ public class BrowserConfig {
         m.put("pageLoadStrategy", pageLoadStrategy.toString());
         m.put("extraHeaders", extraHeaders);
         m.put("rawArguments", rawArguments);
+        m.put("chromePreferences", chromePreferences);
+        m.put("chromeCapabilities", chromeCapabilities);
         return m;
     }
 
@@ -148,6 +176,8 @@ public class BrowserConfig {
         pageLoadStrategy = PageLoadStrategy.NORMAL;
         extraHeaders.clear();
         rawArguments.clear();
+        chromePreferences.clear();
+        chromeCapabilities.clear();
         deleteConfigFile();
     }
 
@@ -203,9 +233,39 @@ public class BrowserConfig {
                     rawArguments.add(e.getAsString());
                 }
             }
+            if (obj.has("chromePreferences") && obj.get("chromePreferences").isJsonObject()) {
+                JsonObject prefs = obj.getAsJsonObject("chromePreferences");
+                for (Map.Entry<String, JsonElement> e : prefs.entrySet()) {
+                    chromePreferences.put(e.getKey(), jsonElementToObject(e.getValue()));
+                }
+            }
+            if (obj.has("chromeCapabilities") && obj.get("chromeCapabilities").isJsonObject()) {
+                JsonObject caps = obj.getAsJsonObject("chromeCapabilities");
+                for (Map.Entry<String, JsonElement> e : caps.entrySet()) {
+                    chromeCapabilities.put(e.getKey(), jsonElementToObject(e.getValue()));
+                }
+            }
         } catch (Exception e) {
             System.err.println("Warning: failed to load config from " + CONFIG_FILE + " — " + e.getMessage());
         }
+    }
+
+    /**
+     * Convert a {@link JsonElement} to the most specific Java type:
+     * boolean → {@link Boolean}, number → {@link Integer} or {@link Double},
+     * string → {@link String}.
+     */
+    private static Object jsonElementToObject(JsonElement el) {
+        if (el.isJsonPrimitive()) {
+            var prim = el.getAsJsonPrimitive();
+            if (prim.isBoolean()) return prim.getAsBoolean();
+            if (prim.isNumber()) {
+                double d = prim.getAsDouble();
+                return (d == Math.floor(d) && !Double.isInfinite(d)) ? (int) d : d;
+            }
+            return prim.getAsString();
+        }
+        return el.toString();
     }
 
     /** Delete the persisted config file. */
@@ -217,4 +277,45 @@ public class BrowserConfig {
 
     /** @return the path of the config file. */
     public static String getConfigFileName() { return CONFIG_FILE; }
+
+    /** @return the path of the source-file pointer. */
+    public static String getSourceFileName() { return SOURCE_FILE; }
+
+    // ── Source-file persistence (survives quit) ─────────────────────────────
+
+    /**
+     * Persist {@code absolutePath} to {@value #SOURCE_FILE} so the next startup
+     * can auto-reload from the same {@code .properties} file without the user
+     * having to re-run {@code config --load-file}.
+     */
+    public void saveSource(String absolutePath) {
+        try {
+            Files.writeString(Path.of(SOURCE_FILE), absolutePath, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Warning: failed to save source-file path — " + e.getMessage());
+        }
+    }
+
+    /**
+     * Read the stored {@code .properties} file path from {@value #SOURCE_FILE}.
+     *
+     * @return the path, or {@code null} if the file does not exist or is blank
+     */
+    public String loadSourcePath() {
+        Path p = Path.of(SOURCE_FILE);
+        if (!Files.exists(p)) return null;
+        try {
+            String path = Files.readString(p, StandardCharsets.UTF_8).trim();
+            return path.isBlank() ? null : path;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Delete {@value #SOURCE_FILE} — call when the user explicitly clears the auto-load source. */
+    public void clearSource() {
+        try {
+            Files.deleteIfExists(Path.of(SOURCE_FILE));
+        } catch (IOException ignored) {}
+    }
 }

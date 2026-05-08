@@ -8,6 +8,7 @@ import cli.session.SessionManager;
 import cli.util.SessionRecorder;
 import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.reader.impl.completer.ArgumentCompleter;
+import org.jline.reader.impl.completer.FileNameCompleter;
 import org.jline.reader.impl.completer.NullCompleter;
 import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.reader.impl.completer.SystemCompleter;
@@ -144,6 +145,11 @@ public class SeleniumCli implements Runnable {
 
         // Load persisted config from .selenium-cli.json (if it exists)
         BrowserConfig.getInstance().load();
+
+        // Auto-load from the registered .properties source file (if one was configured
+        // via 'config --load-file').  This file survives 'quit' and JVM restarts so the
+        // user never has to re-run --load-file manually.
+        autoLoadSourceFile();
 
         // Separate startup flags from the actual command tokens
         boolean noRecordFlag = false;
@@ -376,6 +382,9 @@ public class SeleniumCli implements Runnable {
         // List options
         appendListOption(sb, "Extra Headers",     cfg.getExtraHeaders().isEmpty() ? null : cfg.getExtraHeaders().keySet().toString(), LBL, ON, OFF);
         appendListOption(sb, "Chrome Arguments",  cfg.getRawArguments().isEmpty()  ? null : String.join(", ", cfg.getRawArguments()), LBL, ON, OFF);
+        appendListOption(sb, "Chrome Prefs",      cfg.getChromePreferences().isEmpty() ? null : cfg.getChromePreferences().keySet().toString(), LBL, ON, OFF);
+        appendListOption(sb, "Capabilities",      cfg.getChromeCapabilities().isEmpty() ? null : cfg.getChromeCapabilities().keySet().toString(), LBL, ON, OFF);
+        appendValueOption(sb, "Auto-load File",   cfg.loadSourcePath(), LBL, ON, OFF);
 
         sb.append(BOLD).append(CYAN).append("     ─────────────────────────────────────────────").append(RESET).append("\n");
         sb.append(DIM).append("     Use 'config --<option> true/false' to change at runtime").append(RESET).append("\n");
@@ -422,6 +431,29 @@ public class SeleniumCli implements Runnable {
             System.out.println("{\"session_recorded\": \"" + saved.toString().replace("\\", "\\\\") + "\"}");
         } catch (Exception e) {
             System.err.println("Warning: failed to save session recording — " + e.getMessage());
+        }
+    }
+
+    /**
+     * If a {@code .selenium-cli-source} pointer file exists, silently re-apply the
+     * referenced {@code .properties} file and re-persist to {@code .selenium-cli.json}.
+     * This ensures the user's externalized config is always active at startup without
+     * having to run {@code config --load-file} after every {@code quit}.
+     */
+    private static void autoLoadSourceFile() {
+        BrowserConfig config = BrowserConfig.getInstance();
+        String sourcePath = config.loadSourcePath();
+        if (sourcePath == null) return;
+        if (!java.nio.file.Files.exists(java.nio.file.Path.of(sourcePath))) {
+            System.err.println("Warning: auto-load source file not found: " + sourcePath
+                    + " — run 'config --load-file <path>' to re-register or 'config --clear-source' to clear.");
+            return;
+        }
+        try {
+            cli.util.PropertiesFileLoader.load(sourcePath, config);
+            config.save();   // refresh .selenium-cli.json with the merged settings
+        } catch (Exception e) {
+            System.err.println("Warning: failed to auto-load from " + sourcePath + " — " + e.getMessage());
         }
     }
 
@@ -584,6 +616,13 @@ public class SeleniumCli implements Runnable {
         completers.add(new ArgumentCompleter(
                 new StringsCompleter("switchframe"),
                 new StringsCompleter(iterableToList(new LocatorCandidates())),
+                NullCompleter.INSTANCE));
+
+        // config --load-file <path>  (file-name completion for .properties files)
+        completers.add(new ArgumentCompleter(
+                new StringsCompleter("config"),
+                new StringsCompleter("--load-file"),
+                new FileNameCompleter(),
                 NullCompleter.INSTANCE));
 
         return completers;

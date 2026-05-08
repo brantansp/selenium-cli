@@ -73,6 +73,12 @@ class BrowserConfigTest {
 
         @Test
         void rawArgumentsDefault() { assertTrue(config.getRawArguments().isEmpty()); }
+
+        @Test
+        void chromePreferencesDefault() { assertTrue(config.getChromePreferences().isEmpty()); }
+
+        @Test
+        void chromeCapabilitiesDefault() { assertTrue(config.getChromeCapabilities().isEmpty()); }
     }
 
     // ── Builder methods ─────────────────────────────────────────
@@ -134,6 +140,24 @@ class BrowserConfigTest {
         }
 
         @Test
+        @DisplayName("addPreference stores preference key-value")
+        void addPreference() {
+            config.addPreference("download.prompt_for_download", false);
+            config.addPreference("safebrowsing.enabled", true);
+            assertEquals(2, config.getChromePreferences().size());
+            assertEquals(false, config.getChromePreferences().get("download.prompt_for_download"));
+        }
+
+        @Test
+        @DisplayName("addCapability stores capability key-value")
+        void addCapability() {
+            config.addCapability("acceptInsecureCerts", true);
+            config.addCapability("pageLoadStrategy", "eager");
+            assertEquals(2, config.getChromeCapabilities().size());
+            assertEquals(true, config.getChromeCapabilities().get("acceptInsecureCerts"));
+        }
+
+        @Test
         @DisplayName("pageLoadStrategy sets the strategy")
         void pageLoadStrategy() {
             config.pageLoadStrategy(PageLoadStrategy.EAGER);
@@ -162,6 +186,8 @@ class BrowserConfigTest {
             assertTrue(map.containsKey("pageLoadStrategy"));
             assertTrue(map.containsKey("extraHeaders"));
             assertTrue(map.containsKey("rawArguments"));
+            assertTrue(map.containsKey("chromePreferences"));
+            assertTrue(map.containsKey("chromeCapabilities"));
         }
 
         @Test
@@ -198,7 +224,9 @@ class BrowserConfigTest {
                 .proxyUrl("http://proxy:8080").browserVersion("124")
                 .pageLoadStrategy(PageLoadStrategy.EAGER)
                 .addHeader("X-Test", "val")
-                .addArgument("--disable-gpu");
+                .addArgument("--disable-gpu")
+                .addPreference("safebrowsing.enabled", true)
+                .addCapability("acceptInsecureCerts", true);
 
         config.reset();
 
@@ -211,6 +239,8 @@ class BrowserConfigTest {
         assertNull(config.getBrowserVersion());
         assertTrue(config.getExtraHeaders().isEmpty());
         assertTrue(config.getRawArguments().isEmpty());
+        assertTrue(config.getChromePreferences().isEmpty());
+        assertTrue(config.getChromeCapabilities().isEmpty());
         assertEquals("normal", config.toMap().get("pageLoadStrategy"));
     }
 
@@ -225,7 +255,9 @@ class BrowserConfigTest {
         void saveAndLoad() {
             config.headless(true).windowSize("1366x768")
                     .proxyUrl("http://proxy:3128")
-                    .addHeader("Auth", "Bearer xyz");
+                    .addHeader("Auth", "Bearer xyz")
+                    .addPreference("download.prompt_for_download", false)
+                    .addCapability("acceptInsecureCerts", true);
             config.save();
 
             try {
@@ -235,6 +267,8 @@ class BrowserConfigTest {
                 // Manually revert values (NOT reset(), which deletes the file)
                 config.headless(false).windowSize(null).proxyUrl(null);
                 config.getExtraHeaders().clear();
+                config.getChromePreferences().clear();
+                config.getChromeCapabilities().clear();
                 assertFalse(config.isHeadless());
 
                 // Reload from disk
@@ -243,6 +277,8 @@ class BrowserConfigTest {
                 assertEquals("1366x768", config.getWindowSize());
                 assertEquals("http://proxy:3128", config.getProxyUrl());
                 assertEquals("Bearer xyz", config.getExtraHeaders().get("Auth"));
+                assertEquals(Boolean.FALSE, config.getChromePreferences().get("download.prompt_for_download"));
+                assertEquals(Boolean.TRUE,  config.getChromeCapabilities().get("acceptInsecureCerts"));
             } finally {
                 config.deleteConfigFile();
             }
@@ -262,6 +298,59 @@ class BrowserConfigTest {
             assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
             config.deleteConfigFile();
             assertFalse(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
+        }
+    }
+
+    // ── Source-file persistence ─────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Source-file persistence (saveSource/loadSourcePath/clearSource)")
+    class SourceFile {
+
+        @AfterEach
+        void cleanUp() {
+            config.clearSource();
+        }
+
+        @Test
+        @DisplayName("saveSource() creates .selenium-cli-source with the given path")
+        void saveSource() throws IOException {
+            config.saveSource("/tmp/my-config.properties");
+            assertTrue(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
+            String content = Files.readString(Path.of(BrowserConfig.getSourceFileName()));
+            assertEquals("/tmp/my-config.properties", content.trim());
+        }
+
+        @Test
+        @DisplayName("loadSourcePath() returns null when source file is absent")
+        void loadSourcePathMissing() {
+            config.clearSource();
+            assertNull(config.loadSourcePath());
+        }
+
+        @Test
+        @DisplayName("loadSourcePath() returns the saved path")
+        void loadSourcePathReturns() {
+            config.saveSource("/tmp/config.properties");
+            assertEquals("/tmp/config.properties", config.loadSourcePath());
+        }
+
+        @Test
+        @DisplayName("clearSource() removes the source file")
+        void clearSourceRemoves() {
+            config.saveSource("/tmp/config.properties");
+            assertTrue(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
+            config.clearSource();
+            assertFalse(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
+            assertNull(config.loadSourcePath());
+        }
+
+        @Test
+        @DisplayName("saveSource() overwrites a previously saved path")
+        void saveSourceOverwrites() {
+            config.saveSource("/old/path.properties");
+            config.saveSource("/new/path.properties");
+            assertEquals("/new/path.properties", config.loadSourcePath());
         }
     }
 
@@ -321,6 +410,35 @@ class BrowserConfigTest {
             var options = config.toChromeOptions();
             String optionsJson = options.toJson().toString();
             assertTrue(optionsJson.contains("--custom-flag"));
+        }
+
+        @Test
+        @DisplayName("chromePreferences are set as experimental option 'prefs'")
+        void chromePreferencesApplied() {
+            config.addPreference("download.prompt_for_download", false);
+            config.addPreference("safebrowsing.enabled", true);
+            var options = config.toChromeOptions();
+            // setExperimentalOption stores prefs inside the options JSON
+            String optionsJson = options.toJson().toString();
+            assertTrue(optionsJson.contains("download.prompt_for_download"),
+                    "prefs should appear in ChromeOptions JSON");
+        }
+
+        @Test
+        @DisplayName("Empty chromePreferences does not include 'prefs' in ChromeOptions JSON")
+        void emptyPrefsNotSet() {
+            var options = config.toChromeOptions();
+            String optionsJson = options.toJson().toString();
+            assertFalse(optionsJson.contains("\"prefs\""),
+                    "prefs key should not appear when preferences map is empty");
+        }
+
+        @Test
+        @DisplayName("chromeCapabilities are applied via setCapability")
+        void chromeCapabilitiesApplied() {
+            config.addCapability("acceptInsecureCerts", true);
+            var options = config.toChromeOptions();
+            assertEquals(true, options.getCapability("acceptInsecureCerts"));
         }
     }
 }
