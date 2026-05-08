@@ -27,9 +27,7 @@ import java.util.Map;
 public class BrowserConfig {
 
     private static final BrowserConfig INSTANCE = new BrowserConfig();
-    private static final String CONFIG_FILE  = ".selenium-cli.json";
-    /** Stores the path to the user's .properties file — survives quit and JVM restarts. */
-    private static final String SOURCE_FILE  = ".selenium-cli-source";
+    private static final String CONFIG_FILE = ".selenium-cli.json";
 
     private boolean headless;
     private boolean maximize;
@@ -164,7 +162,7 @@ public class BrowserConfig {
         return m;
     }
 
-    /** Reset to defaults — called on quit. Also removes the persisted config file. */
+    /** Reset all fields to defaults (in-memory only — does not touch the config file). */
     public void reset() {
         headless = false;
         maximize = false;
@@ -178,7 +176,6 @@ public class BrowserConfig {
         rawArguments.clear();
         chromePreferences.clear();
         chromeCapabilities.clear();
-        deleteConfigFile();
     }
 
     // ── persistence ─────────────────────────────────────────────
@@ -277,45 +274,4 @@ public class BrowserConfig {
 
     /** @return the path of the config file. */
     public static String getConfigFileName() { return CONFIG_FILE; }
-
-    /** @return the path of the source-file pointer. */
-    public static String getSourceFileName() { return SOURCE_FILE; }
-
-    // ── Source-file persistence (survives quit) ─────────────────────────────
-
-    /**
-     * Persist {@code absolutePath} to {@value #SOURCE_FILE} so the next startup
-     * can auto-reload from the same {@code .properties} file without the user
-     * having to re-run {@code config --load-file}.
-     */
-    public void saveSource(String absolutePath) {
-        try {
-            Files.writeString(Path.of(SOURCE_FILE), absolutePath, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            System.err.println("Warning: failed to save source-file path — " + e.getMessage());
-        }
-    }
-
-    /**
-     * Read the stored {@code .properties} file path from {@value #SOURCE_FILE}.
-     *
-     * @return the path, or {@code null} if the file does not exist or is blank
-     */
-    public String loadSourcePath() {
-        Path p = Path.of(SOURCE_FILE);
-        if (!Files.exists(p)) return null;
-        try {
-            String path = Files.readString(p, StandardCharsets.UTF_8).trim();
-            return path.isBlank() ? null : path;
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    /** Delete {@value #SOURCE_FILE} — call when the user explicitly clears the auto-load source. */
-    public void clearSource() {
-        try {
-            Files.deleteIfExists(Path.of(SOURCE_FILE));
-        } catch (IOException ignored) {}
-    }
 }

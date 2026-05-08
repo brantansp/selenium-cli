@@ -23,11 +23,12 @@ import picocli.CommandLine.IExecutionExceptionHandler;
 import picocli.shell.jline3.PicocliCommands;
 
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -143,13 +144,14 @@ public class SeleniumCli implements Runnable {
         // Suppress Selenium's internal JUL warnings so only clean JSON hits stdout/stderr
         Logger.getLogger("org.openqa.selenium").setLevel(Level.SEVERE);
 
-        // Load persisted config from .selenium-cli.json (if it exists)
-        BrowserConfig.getInstance().load();
-
-        // Auto-load from the registered .properties source file (if one was configured
-        // via 'config --load-file').  This file survives 'quit' and JVM restarts so the
-        // user never has to re-run --load-file manually.
-        autoLoadSourceFile();
+        // Load persisted config from .selenium-cli.json (if it exists).
+        // If the file is absent (first run or manually deleted) create it now with
+        // default/empty values so every subsequent config change has a file to update.
+        BrowserConfig cfg = BrowserConfig.getInstance();
+        cfg.load();
+        if (!Files.exists(Path.of(BrowserConfig.getConfigFileName()))) {
+            cfg.save();
+        }
 
         // Separate startup flags from the actual command tokens
         boolean noRecordFlag = false;
@@ -384,7 +386,6 @@ public class SeleniumCli implements Runnable {
         appendListOption(sb, "Chrome Arguments",  cfg.getRawArguments().isEmpty()  ? null : String.join(", ", cfg.getRawArguments()), LBL, ON, OFF);
         appendListOption(sb, "Chrome Prefs",      cfg.getChromePreferences().isEmpty() ? null : cfg.getChromePreferences().keySet().toString(), LBL, ON, OFF);
         appendListOption(sb, "Capabilities",      cfg.getChromeCapabilities().isEmpty() ? null : cfg.getChromeCapabilities().keySet().toString(), LBL, ON, OFF);
-        appendValueOption(sb, "Auto-load File",   cfg.loadSourcePath(), LBL, ON, OFF);
 
         sb.append(BOLD).append(CYAN).append("     ─────────────────────────────────────────────").append(RESET).append("\n");
         sb.append(DIM).append("     Use 'config --<option> true/false' to change at runtime").append(RESET).append("\n");
@@ -431,29 +432,6 @@ public class SeleniumCli implements Runnable {
             System.out.println("{\"session_recorded\": \"" + saved.toString().replace("\\", "\\\\") + "\"}");
         } catch (Exception e) {
             System.err.println("Warning: failed to save session recording — " + e.getMessage());
-        }
-    }
-
-    /**
-     * If a {@code .selenium-cli-source} pointer file exists, silently re-apply the
-     * referenced {@code .properties} file and re-persist to {@code .selenium-cli.json}.
-     * This ensures the user's externalized config is always active at startup without
-     * having to run {@code config --load-file} after every {@code quit}.
-     */
-    private static void autoLoadSourceFile() {
-        BrowserConfig config = BrowserConfig.getInstance();
-        String sourcePath = config.loadSourcePath();
-        if (sourcePath == null) return;
-        if (!java.nio.file.Files.exists(java.nio.file.Path.of(sourcePath))) {
-            System.err.println("Warning: auto-load source file not found: " + sourcePath
-                    + " — run 'config --load-file <path>' to re-register or 'config --clear-source' to clear.");
-            return;
-        }
-        try {
-            cli.util.PropertiesFileLoader.load(sourcePath, config);
-            config.save();   // refresh .selenium-cli.json with the merged settings
-        } catch (Exception e) {
-            System.err.println("Warning: failed to auto-load from " + sourcePath + " — " + e.getMessage());
         }
     }
 

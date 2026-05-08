@@ -82,7 +82,6 @@ public class SessionManager {
             driver = null;
             sessionId = null;
             startedAt = null;
-            BrowserConfig.getInstance().reset();
         }
     }
 

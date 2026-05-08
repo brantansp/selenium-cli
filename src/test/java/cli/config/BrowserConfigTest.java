@@ -26,11 +26,13 @@ class BrowserConfigTest {
     @BeforeEach
     void setUp() {
         config.reset();
+        config.deleteConfigFile();
     }
 
     @AfterEach
     void tearDown() {
         config.reset();
+        config.deleteConfigFile();
     }
 
     // ── Singleton ───────────────────────────────────────────────
@@ -244,6 +246,28 @@ class BrowserConfigTest {
         assertEquals("normal", config.toMap().get("pageLoadStrategy"));
     }
 
+    @Test
+    @DisplayName("reset() does NOT delete the persisted config file")
+    void resetDoesNotDeleteFile() throws IOException {
+        config.headless(true);
+        config.save();
+        assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
+
+        config.reset();  // in-memory only — file must survive
+
+        assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())),
+                "reset() must not delete .selenium-cli.json");
+    }
+
+    @Test
+    @DisplayName("deleteConfigFile() removes the persisted config file")
+    void deleteConfigFileRemovesFile() throws IOException {
+        config.save();
+        assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
+        config.deleteConfigFile();
+        assertFalse(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
+    }
+
     // ── Save / Load persistence ─────────────────────────────────
 
     @Nested
@@ -264,7 +288,7 @@ class BrowserConfigTest {
                 // Verify file was created
                 assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
 
-                // Manually revert values (NOT reset(), which deletes the file)
+                // Manually revert values then reload to prove persistence
                 config.headless(false).windowSize(null).proxyUrl(null);
                 config.getExtraHeaders().clear();
                 config.getChromePreferences().clear();
@@ -290,69 +314,8 @@ class BrowserConfigTest {
             config.deleteConfigFile();
             assertDoesNotThrow(() -> config.load());
         }
-
-        @Test
-        @DisplayName("deleteConfigFile() removes the file")
-        void deleteConfigFile() throws IOException {
-            config.save();
-            assertTrue(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
-            config.deleteConfigFile();
-            assertFalse(Files.exists(Path.of(BrowserConfig.getConfigFileName())));
-        }
     }
 
-    // ── Source-file persistence ─────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("Source-file persistence (saveSource/loadSourcePath/clearSource)")
-    class SourceFile {
-
-        @AfterEach
-        void cleanUp() {
-            config.clearSource();
-        }
-
-        @Test
-        @DisplayName("saveSource() creates .selenium-cli-source with the given path")
-        void saveSource() throws IOException {
-            config.saveSource("/tmp/my-config.properties");
-            assertTrue(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
-            String content = Files.readString(Path.of(BrowserConfig.getSourceFileName()));
-            assertEquals("/tmp/my-config.properties", content.trim());
-        }
-
-        @Test
-        @DisplayName("loadSourcePath() returns null when source file is absent")
-        void loadSourcePathMissing() {
-            config.clearSource();
-            assertNull(config.loadSourcePath());
-        }
-
-        @Test
-        @DisplayName("loadSourcePath() returns the saved path")
-        void loadSourcePathReturns() {
-            config.saveSource("/tmp/config.properties");
-            assertEquals("/tmp/config.properties", config.loadSourcePath());
-        }
-
-        @Test
-        @DisplayName("clearSource() removes the source file")
-        void clearSourceRemoves() {
-            config.saveSource("/tmp/config.properties");
-            assertTrue(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
-            config.clearSource();
-            assertFalse(Files.exists(Path.of(BrowserConfig.getSourceFileName())));
-            assertNull(config.loadSourcePath());
-        }
-
-        @Test
-        @DisplayName("saveSource() overwrites a previously saved path")
-        void saveSourceOverwrites() {
-            config.saveSource("/old/path.properties");
-            config.saveSource("/new/path.properties");
-            assertEquals("/new/path.properties", config.loadSourcePath());
-        }
-    }
 
     // ── ChromeOptions generation ────────────────────────────────
 

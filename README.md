@@ -287,7 +287,6 @@ When the REPL starts, a status block is printed after the banner showing the cur
      Chrome Arguments     : off
      Chrome Prefs         : off
      Capabilities         : off
-     Auto-load File       : off
      ─────────────────────────────────────────────
      Use 'config --<option> true/false' to change at runtime
      Use 'config --show' to view current settings
@@ -884,7 +883,7 @@ config [options]
 | `--header <Name:Value>` | Add custom HTTP header (repeatable) | ✅ Yes (via CDP) |
 | `--options <args>` | Raw Chrome arguments, comma-separated | ❌ Next session |
 | `--load-file <path>` | Load config from a `.properties` file | ❌ Next session |
-| `--clear-source` | Forget the auto-load `.properties` file | ✅ Immediate |
+| `--reset-defaults` | Reset all settings to defaults and delete the config file | ✅ Immediate |
 | `--show` | Print current configuration | — |
 
 **Examples:**
@@ -898,6 +897,7 @@ selenium> config --headless false
 selenium> config --record false
 selenium> config --incognito --proxy http://127.0.0.1:8080
 selenium> config --load-file config.properties
+selenium> config --reset-defaults
 ```
 
 ---
@@ -1083,11 +1083,12 @@ selenium quit
 
 ### Config Lifecycle
 
-1. **Before a session** — `config` stores settings in memory and persists to `.selenium-cli.json`
-2. **Across invocations** — `.selenium-cli.json` is loaded automatically on startup
-3. **Session starts** — `open` reads the config and builds Chrome options
-4. **During a session** — Only `--maximize` and `--header` apply immediately; others take effect on the next session
-5. **On quit** — All config is reset and `.selenium-cli.json` is deleted
+1. **On every startup** — `.selenium-cli.json` is loaded if it exists; if absent (first run or manually deleted) it is created immediately with defaults
+2. **`config <options>`** — updates in-memory settings and saves to `.selenium-cli.json`
+3. **`open`** — reads the config and builds Chrome options for the new session
+4. **During a session** — only `--maximize` and `--header` apply immediately; others take effect on the next session
+5. **`quit`** — closes the browser only; **config is preserved** in `.selenium-cli.json` and reloaded on the next `open`
+6. **`config --reset-defaults`** — resets all settings to defaults in memory and deletes `.selenium-cli.json`; the next startup recreates it with defaults
 
 ### Headless Mode
 
@@ -1133,17 +1134,6 @@ selenium> config --show
 selenium> open https://example.com
 ```
 
-The file path is **remembered** in `.selenium-cli-source` (a lightweight pointer file that survives `quit` and JVM restarts). Every subsequent REPL startup or one-shot invocation auto-loads from it — no need to re-run `--load-file` after each session.
-
-```
-     Auto-load File       : C:\TestAutomation\selenium-cli\config.properties
-```
-
-To stop auto-loading:
-
-```bash
-selenium> config --clear-source
-```
 
 Or as a one-shot invocation that survives the JVM restart:
 

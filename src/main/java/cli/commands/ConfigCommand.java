@@ -75,13 +75,13 @@ public class ConfigCommand implements Runnable {
     private List<String> rawOptions;
 
     @Option(names = "--load-file",
-            description = "Load browser config from a .properties file (next session). "
-                    + "The file path is remembered across sessions — auto-loaded on every future startup.")
+            description = "Load browser config from a .properties file (next session)")
     private String loadFile;
 
-    @Option(names = "--clear-source",
-            description = "Forget the auto-load .properties file (stop auto-loading on startup)")
-    private boolean clearSource;
+
+    @Option(names = "--reset-defaults",
+            description = "Reset all config to defaults and delete the persisted config file")
+    private boolean resetDefaults;
 
     @Option(names = "--show", description = "Print current configuration")
     private boolean show;
@@ -100,6 +100,16 @@ public class ConfigCommand implements Runnable {
                 snapshot.put("sessionRecording", SessionRecorder.getInstance().isEnabled());
                 snapshot.putAll(config.toMap());
                 CommandResult.success("config", List.of("--show"), snapshot).print();
+                return;
+            }
+
+            // ── Reset to defaults ────────────────────────────────────
+            if (resetDefaults) {
+                config.reset();
+                config.deleteConfigFile();
+                CommandResult.success("config", List.of("--reset-defaults"),
+                        Map.of("applied", List.of("resetToDefaults=true"),
+                               "warnings", List.of())).print();
                 return;
             }
 
@@ -180,26 +190,18 @@ public class ConfigCommand implements Runnable {
             }
             if (loadFile != null) {
                 try {
-                    // Resolve to absolute path so it works from any working directory
                     java.nio.file.Path resolved = java.nio.file.Path.of(loadFile).toAbsolutePath();
                     PropertiesFileLoader.LoadResult loadResult =
                             PropertiesFileLoader.load(resolved.toString(), config);
                     applied.addAll(loadResult.getApplied());
                     warnings.addAll(loadResult.getWarnings());
                     applied.add("loadedFrom=" + resolved);
-                    // Persist the absolute path so every future startup auto-reloads from it
-                    config.saveSource(resolved.toString());
-                    applied.add("autoLoadRegistered=" + resolved);
                     if (sessionActive) warnings.add("settings from --load-file will apply on next session");
                 } catch (Exception e) {
                     CommandResult.error("config", List.of("--load-file", loadFile),
                             "Failed to load properties file: " + e.getMessage()).print();
                     return;
                 }
-            }
-            if (clearSource) {
-                config.clearSource();
-                applied.add("autoLoadCleared=true");
             }
 
             if (applied.isEmpty() && warnings.isEmpty()) {
